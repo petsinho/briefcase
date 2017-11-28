@@ -8,9 +8,9 @@ import {
   CameraRoll,
   Button,
 } from 'react-native';
+import moment from 'moment';
 import { RNS3 } from 'react-native-aws3';
 import AwsOptions from './secrets';
-
 // TODO: import styles
 const styles = StyleSheet.create({
   container: {
@@ -55,7 +55,7 @@ export default class App extends Component {
   state = {
     selectedPhotos: [],
     isUploading: false,
-    fileLimit: 10,
+    fileLimit: 5,
   }
 
   getPhotos = () => {
@@ -75,19 +75,30 @@ export default class App extends Component {
     this.setState({ modalVisible: !this.state.modalVisible });
   }
 
+  getFileName = (imgURI, coords = null) => {
+    const name = `${imgURI.substr(imgURI.lastIndexOf('/') + 1, imgURI.length)}`;
+    return coords ?
+      `${name}@${getLocationFromCoordinates()}` :
+      name;
+  }
+
   // TODO: organize folders based on seasons/months and years
   upload = async (file) => {
     return new Promise(async (resolve, reject) => {
       const imgURI = file.node.image.uri;
       this.setState({ uploadingFile: imgURI });
-      const timeStamp = file.node.timestamp;
       const fileToUpload = {
         uri: imgURI,
-        name: `${imgURI.substr(imgURI.lastIndexOf('/') + 1, imgURI.length)}_${timeStamp}`,
+        name: this.getFileName(imgURI, file.node.coordinates), // check the name
         type: file.node.type,
       };
       try {
-        const response = await RNS3.put(fileToUpload, AwsOptions);
+        const folderPrefix = file.folder;
+        const prefixedAwsOptions = {
+          ...AwsOptions,
+          keyPrefix: AwsOptions.keyPrefix + folderPrefix,
+        };
+        const response = await RNS3.put(fileToUpload, prefixedAwsOptions);
         if (response.status !== 201) {
           reject(response);
         }
@@ -96,8 +107,26 @@ export default class App extends Component {
     });
   }
 
+  getPrefixFolderByDate = (date) => {
+    const year = moment.unix(date).format('YYYY');
+    const month = moment.unix(date).format('MMMM');
+    return `${year}/${month}/`;
+  }
+
+  organizeFiles = (files) => {
+    const result = files.map(file => {
+      const date = file.node.timestamp;
+      const prefix = this.getPrefixFolderByDate(date);
+      return {
+        ...file,
+        folder: prefix,
+      };
+    });
+    return result;
+  }
+
   uploadPhotos = async () => {
-    const photosToUpload = this.state.selectedPhotos;
+    const photosToUpload = this.organizeFiles(this.state.selectedPhotos);
     this.setState({ isUploading: true });
     try {
       await Promise.all(photosToUpload.map(p => this.upload(p)));
