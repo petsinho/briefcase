@@ -1,4 +1,6 @@
 // TODO: Cleanup
+// TODO: Option to delete photos after upload
+// TODO: Build apk script
 import React, { Component } from 'react';
 import {
   Platform,
@@ -75,10 +77,24 @@ export default class App extends Component {
     this.setState({ modalVisible: !this.state.modalVisible });
   }
 
-  getFileName = (imgURI, coords = null) => {
+  // TODO: use https://github.com/devfd/react-native-geocoder
+  // to tag the location
+  getLocation = () => {
+    return 'mordor';
+    // return new Promise((resolve, reject) => {
+    //   geocoder.reverseGeocode(33.7489, -84.3789, (err, data) => {
+    //   // do something with data
+    //     console.log('resolved loc: ', data);
+    //     if (err) reject(err);
+    //     resolve(data);
+    //   });
+    // });
+  };
+
+  getFileName = async(imgURI, coords = null) => {
     const name = `${imgURI.substr(imgURI.lastIndexOf('/') + 1, imgURI.length)}`;
     return coords ?
-      `${name}@${getLocationFromCoordinates()}` :
+      `${name}@${await this.getLocation()}` :
       name;
   }
 
@@ -92,6 +108,7 @@ export default class App extends Component {
         name: this.getFileName(imgURI, file.node.coordinates), // check the name
         type: file.node.type,
       };
+      console.log('=== uploading file: ', file);
       try {
         const folderPrefix = file.folder;
         const prefixedAwsOptions = {
